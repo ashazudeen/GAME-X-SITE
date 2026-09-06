@@ -10,6 +10,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.util.Set;
 
 /**
@@ -22,6 +23,9 @@ public class MainMenu extends JFrame {
     private JPanel gamesPanel;
     private Runnable onLogout;
     private MainMenuCallback callback;
+    private String activeFilter = "ALL";
+    private static final Color GLASS_BG = new Color(255, 255, 255, 8);
+    private static final Color GLASS_BORDER = new Color(255, 255, 255, 18);
 
     // ── Palette ──
     private static final Color BG = new Color(15, 16, 26);
@@ -65,6 +69,8 @@ public class MainMenu extends JFrame {
         new Color(255, 200, 50)   // One Bullet — bullet gold
     };
 
+    private static final String[] GAME_TYPES = {"I","I","I","I","I","I","W","W","W","W"};
+
     public interface MainMenuCallback {
         void onPlayGame(String gameName);
         void onLogout();
@@ -80,7 +86,7 @@ public class MainMenu extends JFrame {
     private void initUI() {
         setTitle("GameVerse — Game Hub");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1060, 720);
+        setSize(1100, 750);
         setLocationRelativeTo(null);
         setResizable(false);
 
@@ -97,6 +103,7 @@ public class MainMenu extends JFrame {
         JPanel leftSide = new JPanel(new BorderLayout(0, 14));
         leftSide.setOpaque(false);
         leftSide.add(createHero(), BorderLayout.NORTH);
+        leftSide.add(createCategoryTabs(), BorderLayout.NORTH);
 
         gamesPanel = createGamesPanel();
         leftSide.add(gamesPanel, BorderLayout.CENTER);
@@ -118,33 +125,14 @@ public class MainMenu extends JFrame {
         ));
 
         // ── Brand (left) ──
+        LogoComponent logoComp = new LogoComponent();
+        logoComp.setPreferredSize(new Dimension(280, 50));
+
         JPanel brand = new JPanel(new BorderLayout(12, 0));
         brand.setOpaque(false);
 
-        JLabel logo = new JLabel("🎮", SwingConstants.CENTER);
-        logo.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 24));
-        logo.setOpaque(true);
-        logo.setBackground(ACCENT_DEEP);
-        logo.setForeground(Color.WHITE);
-        logo.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
-        logo.setPreferredSize(new Dimension(44, 40));
-
-        JPanel brandText = new JPanel();
-        brandText.setOpaque(false);
-        brandText.setLayout(new BoxLayout(brandText, BoxLayout.Y_AXIS));
-
-        JLabel title = new JLabel("GameVerse");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 21));
-        title.setForeground(new Color(235, 240, 255));
-
-        JLabel sub = new JLabel("Your arcade hub — play, earn XP, climb the ranks");
-        sub.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        sub.setForeground(TEXT_DIM);
-
-        brandText.add(title);
-        brandText.add(sub);
-        brand.add(logo, BorderLayout.WEST);
-        brand.add(brandText, BorderLayout.CENTER);
+        brand.add(logoComp, BorderLayout.WEST);
+        brand.add(Box.createHorizontalGlue(), BorderLayout.CENTER);
 
         // ── Right nav buttons ──
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -268,7 +256,36 @@ public class MainMenu extends JFrame {
 
     /* ═══════════════════ GAMES GRID ═══════════════════ */
 
-    private JPanel createGamesPanel() {
+    private JPanel createCategoryTabs() {
+        JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        wrapper.setOpaque(false);
+        String[] tabs = {"ALL", "IN-APP", "WEB"};
+        for (String tab : tabs) {
+            JButton btn = new JButton(tab);
+            boolean active = tab.equals(activeFilter);
+            btn.setFont(new Font("Segoe UI", Font.BOLD, 10));
+            btn.setForeground(active ? Color.WHITE : TEXT_DIM);
+            btn.setBackground(active ? ACCENT_DEEP : new Color(30, 30, 50));
+            btn.setFocusPainted(false);
+            btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            btn.addActionListener(e -> { activeFilter = tab; refreshGameCards(); });
+            wrapper.add(btn);
+        }
+        return wrapper;
+    }
+
+    private void refreshGameCards() {
+        gamesPanel.removeAll();
+        for (int i = 0; i < GAMES.length; i++) {
+            if (activeFilter.equals("ALL")) gamesPanel.add(createGameCard(i));
+            else if (activeFilter.equals("IN-APP") && "I".equals(GAME_TYPES[i])) gamesPanel.add(createGameCard(i));
+            else if (activeFilter.equals("WEB") && "W".equals(GAME_TYPES[i])) gamesPanel.add(createGameCard(i));
+        }
+        gamesPanel.revalidate();
+        gamesPanel.repaint();
+    }
+
+        private JPanel createGamesPanel() {
         JPanel panel = new JPanel(new GridLayout(0, 3, 14, 14));
         panel.setOpaque(false);
         for (int i = 0; i < GAMES.length; i++) {
@@ -279,10 +296,9 @@ public class MainMenu extends JFrame {
 
     /** Visual state of one game card so hover listeners can restore it. */
     private static class CardState {
-        RoundedPanel card;
+        GlassPanel card;
         JLabel play;
         JLabel record;
-        Color line;
         Color playColor;
         boolean hovering;
     }
@@ -293,8 +309,8 @@ public class MainMenu extends JFrame {
         String desc = GAMES[index][2];
         Color accent = GAME_ACCENTS[index];
 
-        RoundedPanel card = new RoundedPanel(null, CARD_BG, CARD_LINE, 16, false);
-        card.setBorder(BorderFactory.createEmptyBorder(14, 16, 12, 16));
+        GlassPanel card = new GlassPanel(new BorderLayout());
+        card.setBorder(BorderFactory.createEmptyBorder(16, 18, 14, 18));
 
         JPanel inner = new JPanel();
         inner.setOpaque(false);
@@ -304,15 +320,7 @@ public class MainMenu extends JFrame {
         JPanel topRow = new JPanel(new BorderLayout(0, 0));
         topRow.setOpaque(false);
 
-        RoundedPanel tile = new RoundedPanel(new BorderLayout(),
-            new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 40),
-            new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 110), 10, false);
-        tile.setPreferredSize(new Dimension(42, 42));
-        tile.setMaximumSize(new Dimension(42, 42));
-
-        JLabel iconLabel = new JLabel(icon, SwingConstants.CENTER);
-        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 21));
-        tile.add(iconLabel, BorderLayout.CENTER);
+        GlowTile tile = new GlowTile(icon, accent);
         topRow.add(tile, BorderLayout.WEST);
 
         int best = player.getGameHighScore(name);
@@ -360,7 +368,7 @@ public class MainMenu extends JFrame {
         state.card = card;
         state.play = play;
         state.record = record;
-        state.line = CARD_LINE;
+        
         state.playColor = play.getForeground();
 
         MouseAdapter adapter = new MouseAdapter() {
@@ -368,8 +376,8 @@ public class MainMenu extends JFrame {
             public void mouseEntered(MouseEvent e) {
                 if (state.hovering) return;
                 state.hovering = true;
-                state.card.setFill(CARD_HOVER);
-                state.card.setLine(accent);
+                state.card.setGlowColor(accent);
+                state.card.repaint();
                 play.setForeground(accent);
                 record.setForeground(accent);
                 state.card.repaint();
@@ -378,8 +386,8 @@ public class MainMenu extends JFrame {
             public void mouseExited(MouseEvent e) {
                 if (!state.hovering) return;
                 state.hovering = false;
-                state.card.setFill(CARD_BG);
-                state.card.setLine(state.line);
+                state.card.setGlowColor(null);
+                state.card.repaint();
                 play.setForeground(state.playColor);
                 record.setForeground(best > 0 ? GOLD : TEXT_DIM);
                 state.card.repaint();
@@ -826,5 +834,63 @@ public class MainMenu extends JFrame {
 
         dlg.setContentPane(root);
         dlg.setVisible(true);
+    }
+
+    private static class GlassPanel extends JPanel {
+        private Color glowColor;
+        GlassPanel(LayoutManager layout) { super(layout); setOpaque(false); }
+        void setGlowColor(Color c) { this.glowColor = c; }
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int w = getWidth(), h = getHeight();
+            Shape shape = new RoundRectangle2D.Float(0, 0, w-1, h-1, 16, 16);
+            if (glowColor != null) {
+                for (int i = 3; i >= 1; i--) {
+                    g2.setColor(new Color(glowColor.getRed(), glowColor.getGreen(), glowColor.getBlue(), 12*i));
+                    g2.fill(new RoundRectangle2D.Float(-i, -i, w+2*i-1, h+2*i-1, 16+2*i, 16+2*i));
+                }
+            }
+            g2.setPaint(new GradientPaint(0, 0, GLASS_BG, 0, h, new Color(20, 20, 36, 180)));
+            g2.fill(shape);
+            g2.setColor(glowColor != null ? new Color(glowColor.getRed(), glowColor.getGreen(), glowColor.getBlue(), 80) : GLASS_BORDER);
+            g2.draw(shape);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+
+    private static class GlowTile extends JComponent {
+        private final String icon; private final Color accent;
+        GlowTile(String icon, Color accent) { this.icon = icon; this.accent = accent; setPreferredSize(new Dimension(48, 48)); }
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int s = 44, x = (getWidth()-s)/2, y = (getHeight()-s)/2;
+            g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 30));
+            g2.fillRoundRect(x-3, y-3, s+6, s+6, 14, 14);
+            g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 50));
+            g2.fillRoundRect(x, y, s, s, 10, 10);
+            g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 120));
+            g2.drawRoundRect(x, y, s-1, s-1, 10, 10);
+            g2.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 22));
+            FontMetrics fm = g2.getFontMetrics();
+            g2.setColor(Color.WHITE);
+            g2.drawString(icon, x+(s-fm.stringWidth(icon))/2, y+(s+fm.getAscent()-fm.getDescent())/2);
+            g2.dispose();
+        }
+    }
+
+    private static class RoundedLineBorder extends javax.swing.border.AbstractBorder {
+        private final Color color; private final int thickness; private final int radius;
+        RoundedLineBorder(Color color, int thickness, int radius) { this.color = color; this.thickness = thickness; this.radius = radius; }
+        @Override public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color); g2.setStroke(new BasicStroke(thickness));
+            g2.draw(new RoundRectangle2D.Float(x, y, w-1, h-1, radius, radius));
+            g2.dispose();
+        }
+        @Override public Insets getBorderInsets(Component c) { return new Insets(thickness+2, thickness+2, thickness+2, thickness+2); }
     }
 }
